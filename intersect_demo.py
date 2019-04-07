@@ -1,87 +1,105 @@
 import argparse
+import os
+import sys
 from random import randint
 import datetime
+import numpy as np
 import imutils
 import math
 import cv2
-import numpy as np
-pos_x = [None] * 10
-pos_y = [None] * 10
-direction = [None] * 10
+import sqlalchemy as db
+import logging
+import config
 
-deg_rad = 45 * 3.14 / 180.0
+from linecrossingdetector import Line, LineCrossTest, MaskObj
 
-textIn = 0
+from sqlalchemy import create_engine, ForeignKey
+from sqlalchemy import Column, Date, Integer, String, Float
+from sqlalchemy.ext.declarative import declarative_base
 
-# Web Cam = Unused
-#camera = cv2.VideoCapture(0)
-height = 800
-width = 1800
- 
-firstFrame = None
-color = [None] * 10
-speed = 5
-#createObj(10)
-obj_mask = [None] * 10
-# loop over the frames of the video
-for i in range(10):
-    color[i] = (0,255,0)
-    direction[i] = randint(-1,1)
-    pos_x[i] = randint(0,width/2)
-    pos_y[i] = randint(0,height)
+# Logging
+logging.basicConfig(level=config.LOGGING_LEVEL,format='%(asctime)s - %(message)s')
+logging.info("Started Line Crossing Script")
+logging.info("Logging Level : " + str(config.LOGGING_LEVEL))
+logging.debug("Config Loaded")
+logging.debug("DB_PATH = " + str(config.DB_DETAILS))
 
-while True:
-    # use it while 
-    #(grabbed, frame) = camera.read()
-    #text = "Unoccupied"
-    #width = int(camera.get(3))   # float
-    #height = int(camera.get(4)) # float
-    #create frame
-    frame = np.zeros((height,width,3), np.uint8)
-    line_mask = np.zeros((height,width,3), np.uint8)
-    for i in range(10):
-        obj_mask[i] = np.zeros((height,width,3), np.uint8)
+# Get id of the video to be processed.
+try:
+    args = sys.argv
+    vid_id = args[1]
+    line_p1 = args[2] # Line Point 1
+    line_p2 = args[3] # Line Point 2
+    logging.info("Parse Successfull")
+except Exception as e:
+    logging.error("Could not parse given data. Gracefully exiting...")
+    sys.exit(500)
 
-    cv2.line(line_mask, (width /2, 0), (width/2, height), (250, 0, 1), 5) #blue line
-    cv2.line(frame, (width/2 , 0), (width/2,height), (250,0,1),20)
-    #print(np.logical_and(obj_mask, line_mask))
-    for i in range(10):
-        cv2.circle(obj_mask[i], (pos_x[i],pos_y[i]) , 15, color[i], thickness=-1, lineType=8, shift=0) 
-        if (np.any(np.logical_and(obj_mask[i], line_mask))):
-            textIn = "TRUE"
-            color[i] = (0,0,255)
- #       else:
-  #          textIn = "FALSE"
-            #color[i] = (255,255,255)
-        if (pos_x[i] > width or pos_x[i] < 0):
-            pos_x[i] = randint(0,200)
-            color[i] = (255,255,255)
-        if (pos_y[i] > height):
-            pos_y[i] -= 20
-            direction[i] *= -1
-        elif (pos_y[i] < 0):
-            pos_y[i] += 20
-            direction[i] *= -1
-        pos_x[i] += speed
-        pos_y[i] += randint(0,10) * direction[i]
-        cv2.circle(frame, (pos_x[i],pos_y[i]) , 15, color[i], thickness=-1, lineType=8, shift=0)
-    key = cv2.waitKey(1) 
-    if key == ord('q'):
-        break
-    elif key == ord('1'):
-        speed += 10
-    elif key == ord('2'):
-        speed -= 10
+line_cross = Line(line_p1, line_p2)
+# DB Engine Create
+# --------------------------------------------------
+# TODO Swap to Environment Variables
+# try:
+#     DB_PATH = os.environ['DB_PATH']
+# except:
+#     DB_PATH = None
+# If config DB_PATH is set use that engine instead
+logging.warning("Initiating Database Engine")
+DB_PATH = config.DB_DETAILS['DB_PATH']
+if DB_PATH:
+    engine = create_engine(DB_PATH, echo=True)
+else:
+    engine = create_engine('sqlite:///anomaly.db', echo=True)
+Base = declarative_base()
 
-    cv2.putText(frame, "Crossing Status: {}".format(str(textIn)), (10, 50),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-    cv2.putText(frame, datetime.datetime.now().strftime("%A %d %B %Y %I:%M:%S%p"),
-            (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
-    cv2.imshow("Security Feed", frame)
-#    cv2.imshow("Line", line_mask)
-#    cv2.imshow("Obj", obj_mask)
+# DB Connection Create
+# ---------------------------------------------------------
+Base.metadata.create_all(engine)
+connection = engine.connect()
+metadata = db.MetaData()
 
-# cleanup the camera and close any open windows
-#camera.release()
-cv2.destroyAllWindows()
+
+# Tables
+# ---------------------------------------------------------
+anomalies_table = db.Table('DetectedAnomalies', metadata, autoload=True, autoload_with=engine)
+video_table = db.Table('Videos',metadata,autoload=True, autoload_with=engine)
+video_detected_objects_table = db.Table('VideoDetectedObject',metadata,autoload=True, autoload_with=engine)
+detected_objs_table = db.Table('DetectedObjects', metadata, autoload=True, autoload_with=engine)
+
+
+# Important part in general we grab video details here
+# ---------------------------------------------------------
+video_details = connection.execute(db.select([video_table]).where(video_table._columns.VideoId == vid_id)).fetchmany(1)[0]
+vid_name = video_details['Name']
+
+width = video_details['Width'] 
+height = video_details['Height']
+
+
+test_engine = LineCrossTest(line_cross)
+
+detected_objs_details = []
+detected_obj_video = connection.execute(db.select([video_detected_objects_table]).where(video_detected_objects_table._columns.VideoId == vid_id)).fetchall()
+for item in detected_obj_video:
+    details = connection.execute(db.select([detected_objs_table]).where(detected_objs_table._columns.DetectedObjectId == item['DetectedObjectId'])).fetchall()
+    detected_objs_details.append(details[0])
+
+logging.info("Processing " + vid_name)
+    
+mask_objs = []
+
+for item in detected_objs_details:
+    # TODO Change the coords to appropriate format
+    center_x, center_y, width, height = item['']
+    # TODO Variables to be fixed
+    ob_d = MaskObj(center_x,center_y,width,height)
+    logging.warning("Trying Masking Operation")
+    mask_objs.append(ob_d)
+    res = test_engine.getMaskingResult(ob_d)
+    logging.info("Masking Operation Successful with result" + str(res))
+    if res:
+        connection.execute(insert(anomalies).values(detected_anomaly = "Line Crossing Detected", frame_id=item['FrameNo'], center_x = ob_d.get_x(), center_y = ob_d.get_y(), width = ob_d.width(), height = ob_d.get_height()) )
+
+
+
 
