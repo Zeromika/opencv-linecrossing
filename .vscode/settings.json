@@ -1,3 +1,12 @@
 {
-    "python.pythonPath": "/Users/zeromiya/anaconda3/bin/python"
+	"python.pythonPath": "detect/bin/python",
+	"python.linting.pylintEnabled": true,
+	"python.linting.enabled": true,
+	"todo-tree.customHighlight": {
+		"TODO" : {
+			"icon" : "check",
+			"type" : "line"
+		}
+	},
+	"files.autoSave": "afterDelay"
 }
