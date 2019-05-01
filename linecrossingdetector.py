@@ -22,18 +22,19 @@ class MaskObj:
         self.center_x = center_x
         self.center_y = center_y
         self.width = width
+        self.height = height
 
     def get_x(self):
-        return self.center_x
+        return int(self.center_x - self.width/2)
 
     def get_y(self):
-        return self.center_y
+        return int(self.center_y + self.height/2)
 
     def get_width(self):
-        return self.width
+        return int(self.width)
 
     def get_height(self):
-        return self.get_height
+        return int(self.height)
 
     def __str__(self):
         return "Mask Object {center_x:"+self.center_x + ", center_y:" + center_y + "}"
@@ -51,7 +52,7 @@ class Line:
         self.__linetype = 8
         self.__thickness = 2
 
-    def getAttributes():
+    def getAttributes(self):
         return self.__point1, self.__point2, self.__color, self.__linetype, self.__thickness
 
 
@@ -80,10 +81,10 @@ class LineCrossTest:
     def getMaskingResult(self, maskObj):
         frame = np.zeros((self.__height, self.__width, 3), np.uint8)
         point1, point2, color, linetype, thickness = self.__line.getAttributes()
-        cv2.line(__mask, point1, point2, color, thickness, linetype)
+        cv2.line(self.__mask, point1, point2, color, thickness, linetype)
         cv2.circle(frame, (maskObj.get_x(), maskObj.get_y()), maskObj.get_width(
         ), (0, 0, 255), thickness=-1, lineType=8, shift=0)
-        if np.any(np.logical_and(frame, __mask)):
+        if np.any(np.logical_and(frame, self.__mask)):
             return True
         else:
             return False
