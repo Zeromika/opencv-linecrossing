@@ -11,6 +11,7 @@ import sqlalchemy as db
 import logging
 import config
 import json
+from math import ceil
 
 from linecrossingdetector import Line, LineCrossTest, MaskObj
 
@@ -18,8 +19,12 @@ from sqlalchemy import create_engine, ForeignKey
 from sqlalchemy import Column, Date, Integer, String, Float
 from sqlalchemy.ext.declarative import declarative_base
 
+def info_function(value):
+    sys.stdout.write(json.dumps(dict(progress=ceil(value)), indent=2))
+    sys.stdout.flush()
+
 # Logging
-logging.basicConfig(level=config.LOGGING_LEVEL,format='%(asctime)s - %(message)s')
+logging.basicConfig(filename=str(config.LOG_PATH),level=config.LOGGING_LEVEL,format='%(asctime)s - %(message)s')
 logging.info("Started Line Crossing Script")
 logging.info("Logging Level : " + str(config.LOGGING_LEVEL))
 logging.debug("Config Loaded")
@@ -50,9 +55,9 @@ line_cross = Line((line_p1, line_p2), (line_p3, line_p4))
 logging.warning("Initiating Database Engine")
 DB_PATH = config.DB_DETAILS['DB_PATH']
 if DB_PATH:
-    engine = create_engine(DB_PATH, echo=True)
+    engine = create_engine(DB_PATH, echo=False)
 else:
-    engine = create_engine('sqlite:///anomaly.db', echo=True)
+    engine = create_engine('sqlite:///anomaly.db', echo=False)
 Base = declarative_base()
 
 # DB Connection Create
@@ -87,8 +92,9 @@ detected_objs_details = connection.execute(db.select([detected_objs_table]).wher
 logging.info("Processing " + vid_name)
     
 mask_objs = []
-
+processed = 0
 for item in detected_objs_details:
+
     left_x = item['left_x']
     top_y = item['top_y']
     width = item['width']
@@ -102,12 +108,10 @@ for item in detected_objs_details:
     logging.warning("Trying Masking Operation")
     mask_objs.append(ob_d)
     res = test_engine.getMaskingResult(ob_d)
-    logging.info("Masking Operation Successful with result" + str(res))
+    logging.info("Masking Operation Successful for Frame : " + str(item['frame_no']) + " with result " + str(res))
+    processed = processed + 1
+    info_function((processed/len(detected_objs_details)*100))
     if res:
         query = connection.execute(db.insert(anomalies_table).values(rule_id = 2,frame_no =item['frame_no'],left_x = ob_d.get_x(), top_y = ob_d.get_y(), width = ob_d.get_width(), height = ob_d.get_height()) )
-        io = json.dumps(query.lastrowid)
-        logging.warning(io)
         query2 = connection.execute(db.insert(video_anomalies_table).values(detected_anomaly_id = query.lastrowid , video_id = vid_id))
-
-
 

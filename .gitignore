@@ -3,6 +3,7 @@
 detect
 .DS_Store
 config.py
+logs
 
 __pycache__/config.cpython-36.pyc
 __pycache__/linecrossingdetector.cpython-36.pyc
