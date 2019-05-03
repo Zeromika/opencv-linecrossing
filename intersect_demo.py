@@ -112,6 +112,6 @@ for item in detected_objs_details:
     processed = processed + 1
     info_function((processed/len(detected_objs_details)*100))
     if res:
-        query = connection.execute(db.insert(anomalies_table).values(rule_id = 2,frame_no =item['frame_no'],left_x = ob_d.get_x(), top_y = ob_d.get_y(), width = ob_d.get_width(), height = ob_d.get_height()) )
+        query = connection.execute(db.insert(anomalies_table).values(rule_id = 2,frame_no =item['frame_no'],left_x = ob_d.get_x(), top_y = ob_d.get_y(), width = ob_d.get_width(), height = ob_d.get_height()), params = json.dumps(args) )
         query2 = connection.execute(db.insert(video_anomalies_table).values(detected_anomaly_id = query.lastrowid , video_id = vid_id))
 
