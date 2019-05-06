@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import time
 from random import randint
 import datetime
 import numpy as np
@@ -110,6 +111,7 @@ for item in detected_objs_details:
     res = test_engine.getMaskingResult(ob_d)
     logging.info("Masking Operation Successful for Frame : " + str(item['frame_no']) + " with result " + str(res))
     processed = processed + 1
+    time.sleep(0.5) # Sleep half a second to process data
     info_function((processed/len(detected_objs_details)*100))
     if res:
         query = connection.execute(db.insert(anomalies_table).values(rule_id = 2,frame_no =item['frame_no'],left_x = ob_d.get_x(), top_y = ob_d.get_y(), width = ob_d.get_width(), height = ob_d.get_height()), params = json.dumps(args) )
